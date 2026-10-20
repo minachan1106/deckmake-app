@@ -1,9 +1,17 @@
 import { Hono } from 'hono'
+import { SCHEMA } from './schema'
 
 type Env = { DB: D1Database; ASSETS: Fetcher }
 type Item = { name_en: string; name_ja?: string | null; qty: number }
 
 const app = new Hono<{ Bindings: Env }>()
+
+let ready: Promise<unknown> | null = null
+app.use('/api/*', async (c, next) => {
+  ready ??= c.env.DB.batch(SCHEMA.map((q) => c.env.DB.prepare(q))).catch((e) => { ready = null; throw e })
+  await ready
+  await next()
+})
 const now = () => new Date().toISOString()
 const YGO = 'https://db.ygoprodeck.com/api/v7/cardinfo.php?format=duel%20links'
 

@@ -9,8 +9,6 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:local": "wrangler d1 migrations apply deckmake --local",
-    "db:remote": "wrangler d1 migrations apply deckmake --remote",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

@@ -17,7 +17,7 @@
 |---|---|
 | フロント | React 19 + TypeScript + Vite + Tailwind CSS v4（PWA、ホーム画面追加前提） |
 | API | Cloudflare Workers + Hono（`worker/`）。`/api/*` |
-| DB | Cloudflare D1（SQLite）。`migrations/` で管理 |
+| DB | Cloudflare D1（SQLite）。スキーマは `worker/schema.ts`、Worker起動時に自動適用（`IF NOT EXISTS`）。`database_id` は省略しデプロイ時に自動作成 |
 | 配信 | Workers Static Assets（`dist/` をWorkerと同一デプロイ） |
 | 認証 | 最小：Cloudflare Access（ワンタイムPIN）をダッシュボード側で設定。アプリ内に認証コードは持たない |
 | カードDB | YGOPRODeck API v7（`format=duel links`）。**Worker経由で1回だけ全件取得しD1にキャッシュ**。クライアントからは直接叩かない |
@@ -38,7 +38,6 @@
 worker/        Hono API（index.ts がエントリ、routes は機能単位）
 src/           フロント（components / pages / lib）
 src/lib/       bridge.ts(Claude連携) matching.ts(名前照合) api.ts(fetchラッパ) など純粋ロジック
-migrations/    D1 SQL（連番、既存は編集せず追加する）
 docs/          要件定義
 ```
 
@@ -47,9 +46,8 @@ docs/          要件定義
 ```
 npm run dev          # フロント(Vite)。/api は wrangler dev(8787) にプロキシ
 npm run dev:worker   # Worker + ローカルD1
-npm run db:local     # ローカルD1へmigration適用
 npm run typecheck && npm test && npm run build   # コミット前に必ず通す
-npm run deploy       # 本番（事前に wrangler d1 create deckmake → wrangler.jsonc の database_id を設定、npm run db:remote）
+# 本番: Cloudflare Workers Builds（GitHub連携）で自動デプロイ。ビルド `npm run build` / デプロイ `npx wrangler deploy`
 ```
 
 ## 実装ルール
@@ -57,7 +55,8 @@ npm run deploy       # 本番（事前に wrangler d1 create deckmake → wrangl
 - YGOPRODeck: レート制限1秒20リクエスト・超過で1時間ブロック。**全件同期は1リクエスト**で行い、個別カード取得のループ禁止。画像は直リンクせずR2等へ自前保持（現状は画像なしで運用）。
 - 外部サイト記事は丸ごと保存しない。`meta_snapshots` には要約のみ。スクレイピングはしない（環境情報はClaudeのWeb検索結果をブリッジで取り込む）。
 - 日本語名照合の確定結果は `name_map`（`source: 'confirmed'`）へ。曖昧な候補だけユーザー確認UIに出す。
-- D1スキーマ変更は新しい migration ファイルを追加。
+- D1スキーマ変更は `worker/schema.ts` 末尾に冪等なSQLを追加（既存文は編集しない。列追加は `ALTER TABLE` を別文で）。
+- **開発・利用ともスマホのみ**。ユーザーにCLI操作（wrangler等）を要求しない。手順はCloudflare/GitHubアプリ・ブラウザで完結させる。
 - 提案は常に「手持ちのみ／無課金／課金あり」を分け、`meta_snapshots` の取得日時を併記する。
 - 想定ユーザー前提：復帰直後（現ルーキー、過去最高プラチナ）。提案はプラチナ以上水準。
 
